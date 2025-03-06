@@ -15,7 +15,7 @@ const getAccessToken = async () => {
 
         userStore.access_token = access_token;
 
-        return access_token
+        return `Bearer ${access_token}`
     }
     return null
 }

@@ -1,5 +1,5 @@
 import { axiosAuth } from "@/util/axios";
-import { useUserStore, type Task } from "@/util/pinia";
+import { useUserStore } from "@/util/pinia";
 
 
 async function deletePin(requestId: string) {
