@@ -1,94 +1,624 @@
 <script lang="ts" setup>
 import { useRoute } from 'vue-router';
-import { ref } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useSettingStore } from '@/util/pinia';
-import type { StorageItem } from '@/type/storage';
+import type { FileItem, StorageItem } from '@/type/storage';
+import { AiOutlineClose, AiOutlineCloudDownload, AiOutlineCloudUpload, AiOutlineDelete, AiOutlineFile, AiOutlineFolder, AiOutlineSetting } from 'vue-icons-plus/ai';
+import { BiMove } from 'vue-icons-plus/bi';
+import deleteComp from '@/component/deleteComp.vue';
+import downloadComp from '@/component/downloadComp.vue';
+import moveComp from '@/component/moveComp.vue';
+import settingComp from '@/component/settingComp.vue';
+import uploadComp from '@/component/uploadComp.vue';
 
-const path = ref(useRoute().path);
-if (path.value === '/') {
-    document.title = 'home | Crust'
-    const title = path.value.split("/");
-    console.log(title);
-} else {
-    const title = path.value.split("/");
-    console.log(title);
-
-    document.title = `${title[title.length - 1]} | Crust`;
-}
+const route = useRoute();
 const settingStore = useSettingStore();
-const getStorageShowItemList = () => {
-    const path = useRoute().path;
-    const content = settingStore.content;
 
-    // 如果路径是根路径 "/"，直接返回所有顶层内容
-    if (path === '/') {
-        return content;
+// 响应式数据
+const selectedItems = ref<string[]>([]);
+const currentPath = ref(route.path);
+const currentContent = ref<{ type: 'file' | 'folder' | 'error'; content: StorageItem | StorageItem[] }>({
+    type: 'folder',
+    content: []
+});
+
+// 计算属性
+const isRoot = computed(() => currentPath.value === '/');
+const allSelected = computed({
+    get: () => selectedItems.value.length === (currentContent.value.content as StorageItem[]).length
+        && (currentContent.value.content as StorageItem[]).length > 0,
+    set: (value) => {
+        selectedItems.value = value
+            ? (currentContent.value.content as StorageItem[]).map(item => item.name)
+            : [];
     }
+});
 
-    // 将路径拆分为数组，例如 "/folder1/folder2" -> ["folder1", "folder2"]
-    const pathSegments = path.split('/').filter(segment => segment.length > 0);
+// 监听路径变化
+watch(() => route.path, (newPath) => {
+    currentPath.value = newPath;
+    updateContent();
+    updateTitle();
+});
 
-    let currentItems: StorageItem[] = content;
+// 方法
+const updateTitle = () => {
+    const titleSegment = currentPath.value.split('/').filter(Boolean).pop() || 'home';
+    document.title = `${titleSegment} | Crust`;
+};
 
-    // 遍历路径的每一段
-    for (const segment of pathSegments) {
-        const foundItem = currentItems.find(item => item.name === segment && item.type === 'floder');
-        if (!foundItem || !foundItem.children) {
-            console.log("path in storeage error");
+const updateContent = () => {
+    try {
+        const result = resolvePath(currentPath.value, settingStore.content);
+        currentContent.value = result;
+    } catch (error) {
+        console.error('路径解析错误:', error);
+        currentContent.value = { type: 'error', content: [] };
+    }
+};
 
-            return []; // 如果路径不存在或不是文件夹，返回空数组
+const resolvePath = (path: string, content: StorageItem[]): { type: 'file' | 'folder' | 'error'; content: StorageItem | StorageItem[] } => {
+    const segments = path.split('/').filter(Boolean);
+    if (path === '/') return { type: 'folder', content };
+
+    let currentChildren: StorageItem[] = content;
+    let targetItem: StorageItem | undefined;
+
+    for (let i = 0; i < segments.length; i++) {
+        targetItem = currentChildren.find(item => item.name === segments[i]);
+        if (!targetItem) break;
+
+        if (i === segments.length - 1) break; // 到达目标层级
+
+        if (targetItem.type === 'folder') {
+            currentChildren = targetItem.children || [];
+        } else {
+            throw new Error('路径包含文件类型');
         }
-        currentItems = foundItem.children; // 进入下一层
     }
 
-    return currentItems; // 返回当前路径对应的子项
+    if (!targetItem) return { type: 'error', content: [] };
+
+    return targetItem.type === 'folder'
+        ? { type: 'folder', content: targetItem.children || [] }
+        : { type: 'file', content: targetItem };
+};
+
+const toggleSelection = (itemName: string) => {
+    selectedItems.value = selectedItems.value.includes(itemName)
+        ? selectedItems.value.filter(name => name !== itemName)
+        : [...selectedItems.value, itemName];
+};
+
+const getFullPath = (itemName: string) => {
+    const base = currentPath.value === '/' ? '' : currentPath.value;
+    return `${base}/${itemName}`.replace(/\/+/g, '/');
+};
+
+
+const formatFileSize = (size: number): string => {
+    if (size < 1024) {
+        return size + ' B';
+    } else if (size < 1024 * 1024) {
+        return (size / 1024).toFixed(2) + ' KB';
+    } else if (size < 1024 * 1024 * 1024) {
+        return (size / (1024 * 1024)).toFixed(2) + ' MB';
+    } else {
+        return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+};
+
+// 生成面包屑导航数据
+const breadcrumbs = computed(() => {
+    const segments = currentPath.value.split('/').filter(Boolean);
+    const crumbs = [{ name: 'Home', path: '/' }];
+
+    let accumulatedPath = '';
+    for (const segment of segments) {
+        accumulatedPath += `/${segment}`;
+        crumbs.push({
+            name: segment,
+            path: accumulatedPath
+        });
+    }
+    return crumbs;
+});
+
+// 新增计算属性
+const hasSelection = computed(() => selectedItems.value.length > 0);
+
+const activePanel = ref<string | null>(null)
+
+const openPanel = (panel: string) => {
+    activePanel.value = panel
 }
+
+const closePanel = () => {
+    activePanel.value = null
+}
+
+// 初始化
+updateTitle();
+updateContent();
 </script>
 
 <template>
-    <div class="homeContainer">
-        <!-- 操作栏 -->
-        <div class="topBar">
-            <div class="leftPart">
-                <img class="logo" src="/src/public/favicon.ico">
-                <div class="pathSHow">{{ path }}</div>
+    <div class="container">
+        <!-- 顶部导航栏 -->
+        <header class="app-bar">
+            <div class="path-display">
+                <router-link to="/">
+                    <img src="/src/public/favicon.ico" class="logo" alt="Logo">
+                </router-link>
+                <nav class="breadcrumb">
+                    <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
+                        <router-link :to="crumb.path" class="crumb-link"
+                            :class="{ 'last-crumb': index === breadcrumbs.length - 1 }">
+                            {{ crumb.name }}
+                        </router-link>
+                        <span v-if="index < breadcrumbs.length - 1" class="separator">/</span>
+                    </template>
+                </nav>
             </div>
-            <div class="rightPart">
-                <div class="searchBox">
-                    <input type="text" placeholder="搜索文件">
+            <div class="right-group">
+                <div class="storage-actions">
+                    <button class="action-item" @click="openPanel('download')" :disabled="!hasSelection"
+                        aria-label="下载选中项目">
+                        <AiOutlineCloudDownload />
+                        <span class="tooltip">下载</span>
+                    </button>
+
+                    <button class="action-item" @click="openPanel('move')" :disabled="!hasSelection"
+                        aria-label="移动选中项目">
+                        <BiMove />
+                        <span class="tooltip">移动</span>
+                    </button>
+
+                    <button class="action-item" @click="openPanel('delete')" :disabled="!hasSelection"
+                        aria-label="删除选中项目">
+                        <AiOutlineDelete />
+                        <span class="tooltip">删除</span>
+                    </button>
+
+                    <button class="action-item" @click="openPanel('upload')" aria-label="上传文件">
+                        <AiOutlineCloudUpload />
+                        <span class="tooltip">上传</span>
+                    </button>
+
+                    <button class="action-item" @click="openPanel('setting')" aria-label="设置">
+                        <AiOutlineSetting />
+                        <span class="tooltip">设置</span>
+                    </button>
                 </div>
+
+                <div class="search-box">
+                    <input type="text" placeholder="搜索文件..." class="search-input">
+                </div>
+            </div>
+        </header>
+
+        <!-- 功能界面 -->
+        <div v-show="activePanel !== null" class="modal-mask" @click.self="closePanel">
+            <div class="userPanel">
+                <!-- 关闭按钮 -->
+                <button @click="closePanel" class="close-btn">
+                    <AiOutlineClose class="close-icon" />
+                </button>
+
+                <!-- 功能组件 -->
+                <component :is="deleteComp" v-show="activePanel === 'delete'" />
+                <component :is="downloadComp" v-show="activePanel === 'download'" />
+                <component :is="moveComp" v-show="activePanel === 'move'" />
+                <component :is="settingComp" v-show="activePanel === 'setting'" />
+                <component :is="uploadComp" v-show="activePanel === 'upload'" />
             </div>
         </div>
 
-        <!-- 文件列表 -->
-        <div class="storageItemList">
-            <table>
+        <!-- 错误状态 -->
+        <div v-if="currentContent.type === 'error'" class="error-state">
+            <p>路径不存在或包含非法文件类型</p>
+        </div>
+
+        <!-- 文件内容展示区 -->
+        <main class="content-area">
+            <!-- 文件视图 -->
+            <section v-if="currentContent.type === 'file'" class="file-view">
+                <div class="file-meta">
+                    <h2>{{ (currentContent.content as FileItem).name }}</h2>
+                    <p>文件大小：{{ formatFileSize((currentContent.content as FileItem).size) }}</p>
+                    <p>创建时间：{{ (currentContent.content as FileItem).created }}</p>
+                </div>
+                <a class="download-btn"
+                    :href="`${settingStore.server.download.use}/ipfs/${(currentContent.content as FileItem).cid}`"
+                    :download="(currentContent.content as FileItem).name" target="_blank">
+                    下载文件
+                </a>
+            </section>
+
+            <!-- 文件夹视图 -->
+            <table v-else-if="currentContent.type === 'folder'" class="file-table">
                 <thead>
                     <tr>
-                        <th class="name-col">名称</th>
-                        <th class="size-col">大小</th>
-                        <th class="modified-col">修改时间</th>
+                        <th class="checkbox-cell">
+                            <input type="checkbox" v-model="allSelected">
+                        </th>
+                        <th class="name-header">名称</th>
+                        <th class="size-header">大小</th>
+                        <th class="date-header">修改时间</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(item, index) in getStorageShowItemList()" :key="index">
+                    <tr v-for="item in (currentContent.content as StorageItem[])" :key="item.name" class="file-row">
+                        <td class="checkbox-cell">
+                            <input type="checkbox" :checked="selectedItems.includes(item.name)"
+                                @change="toggleSelection(item.name)">
+                        </td>
+                        <td class="name-cell">
+                            <div class="name-wrapper">
+                                <span class="file-icon" v-if="item.type === 'file'">
+                                    <AiOutlineFile />
+                                </span>
+                                <span class="folder-icon" v-if="item.type === 'folder'">
+                                    <AiOutlineFolder />
+                                </span>
+                                <router-link class="item-link" :to="getFullPath(item.name)">
+                                    {{ item.name }}
+                                </router-link>
+                            </div>
+                        </td>
+                        <td class="size-cell">{{ formatFileSize(item.size) }}</td>
+                        <td class="date-cell">{{ item.created }}</td>
                     </tr>
                 </tbody>
             </table>
-        </div>
-
-        <!-- 分页 -->
-        <div class="pagination">
-            <button class="pageChange">上一页</button>
-            <span class="pageNumber">1/5</span>
-            <button class="pageChange">下一页</button>
-        </div>
+        </main>
     </div>
 </template>
 
 <style scoped>
-.homeContainer {
-    height: 100%;
+.container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #1a202c;
+    color: #e5e7eb;
+}
+
+.app-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background-color: #2d3748;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 新增面包屑样式 */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.crumb-link {
+    color: #a0aec0;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+    position: relative;
+
+    &:not(.last-crumb):hover {
+        color: #63b3ed;
+    }
+
+    &.last-crumb {
+        color: #e5e7eb;
+        cursor: default;
+    }
+}
+
+.separator {
+    color: #4a5568;
+    user-select: none;
+}
+
+.path-display {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo {
+    height: 2rem;
+    width: 2rem;
+    border-radius: 50%;
+}
+
+.path-text {
+    color: #a0aec0;
+    font-size: 0.9rem;
+}
+
+
+/* 右侧组合布局 */
+.right-group {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-left: auto;
+}
+
+/* 操作按钮组 */
+.storage-actions {
+    display: flex;
+    gap: 1rem;
+    position: relative;
+}
+
+/* 单个操作项 */
+.action-item {
+    position: relative;
+    background: none;
+    border: none;
+    color: #a0aec0;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.2s ease;
+
+    &:hover {
+        color: #63b3ed;
+
+        .tooltip {
+            opacity: 1;
+            transform: translateX(-50%) translateY(5px);
+        }
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+
+        &:hover {
+            color: #a0aec0;
+
+            .tooltip {
+                display: none;
+            }
+        }
+    }
+
+    .tooltip {
+        position: absolute;
+        top: 80%;
+        /* 修改为下方定位 */
+        left: 50%;
+        transform: translateX(-50%) translateY(-5px);
+        background: #2d3748;
+        color: #e5e7eb;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        z-index: 10;
+        margin-top: 8px;
+        /* 增加间距 */
+
+        &::after {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            /* 调整三角位置 */
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-bottom-color: #2d3748;
+            /* 三角方向改为向上 */
+        }
+    }
+}
+
+/* 搜索框保持原有样式 */
+.search-box {
+    margin-right: 50px;
+    width: 200px;
+}
+
+.search-input {
     width: 100%;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: 1px solid #4a5568;
+    background-color: #2d3748;
+    color: inherit;
+    transition: border-color 0.2s;
+
+    &:focus {
+        border-color: #63b3ed;
+        outline: none;
+    }
+}
+
+
+
+.modal-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: grid;
+    place-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.userPanel {
+    background: #2d3748;
+    border-radius: 10px;
+    padding: 0;
+    width: 80%;
+    height: 80%;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    position: relative;
+}
+
+/* 保持原有样式，新增以下响应式调整 */
+@media (max-width: 768px) {
+    .userPanel {
+        max-width: 95%;
+        padding: 1rem;
+    }
+}
+
+.close-btn {
+    margin: 0;
+    padding: 0;
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: #4a5568;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.close-btn:hover {
+    background: #718096;
+    transform: rotate(90deg);
+}
+
+.close-icon {
+    color: #e5e7eb;
+}
+
+.content-area {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.file-view {
+    padding: 2rem;
+    background: #2d3748;
+    border-radius: 8px;
+    margin: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.file-meta {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.file-meta h2 {
+    color: #63b3ed;
+    font-size: 1.5rem;
+}
+
+.download-btn {
+    align-self: start;
+    padding: 0.8rem 1.5rem;
+    background: #4299e1;
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.2s;
+
+    &:hover {
+        background: #3182ce;
+    }
+}
+
+.error-state {
+    padding: 2rem;
+    text-align: center;
+    color: #fc8181;
+}
+
+.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #2d3748;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 10px;
+}
+
+.file-table th,
+.file-table td {
+    padding: 1rem;
+    text-align: left;
+}
+
+.file-table thead {
+    background-color: #4a5568;
+}
+
+.file-row {
+    border-bottom: 1px solid #4a5568;
+
+    &:last-child {
+        border-bottom: none;
+    }
+
+    transition: background-color 0.2s;
+
+    &:hover {
+        background-color: #3c4656;
+    }
+}
+
+.checkbox-cell {
+    width: 40px;
+    text-align: center;
+}
+
+.name-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    /* 控制图标与文字间距 */
+}
+
+.file-icon,
+.folder-icon {
+    display: inline-flex;
+    font-size: 1.1em;
+    /* 保持与文字大小协调 */
+    margin-top: -1px;
+    /* 微调垂直对齐 */
+}
+
+.item-link {
+    color: #63b3ed;
+    text-decoration: none;
+    transition: color 0.2s;
+
+    &:hover {
+        color: #4299e1;
+        text-decoration: underline;
+    }
+}
+
+.empty-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: #a0aec0;
 }
 </style>

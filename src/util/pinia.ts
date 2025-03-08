@@ -1,5 +1,7 @@
 import { createPinia, defineStore } from "pinia";
 import type { StorageItem } from "@/type/storage";
+import type { PinStatus, UploadFileResponse } from "@/type/crust";
+import { PromisePool } from "./task_pool";
 
 const pinia = createPinia()
 
@@ -10,15 +12,15 @@ type Setting = {
     },
     server: {
         upload: {
-            default: string,
+            use: string,
             list: string[],
         },
         download: {
-            default: string,
+            use: string,
             list: string[],
         },
         pin: {
-            default: string,
+            use: string,
             list: string[],
         }
     },
@@ -33,7 +35,7 @@ const useSettingStore = defineStore('setting', {
         },
         server: {
             upload: {
-                default: 'https://gw.crustfiles.net',
+                use: 'https://gw.crustfiles.net',
                 list: [
                     'https://gw.crustfiles.net',
                     'https://crustipfs.xyz',
@@ -44,7 +46,7 @@ const useSettingStore = defineStore('setting', {
                 ],
             },
             download: {
-                default: "https://ipfs.io",
+                use: "https://ipfs.io",
                 list: [
                     'https://ipfs.io',
                     'https://gw.w3ipfs.org.cn',
@@ -53,17 +55,86 @@ const useSettingStore = defineStore('setting', {
                 ],
             },
             pin: {
-                default: 'https://pin.crustcode.com',
+                use: 'https://pin.crustcode.com',
                 list: [
                     'https://pin.crustcode.com'
                 ],
             }
         },
-        content: []
+        content: [],
     }),
+})
+
+type TaskItem = {
+    id: string,
+    name: string,
+    size: number,
+    content: File,
+    upload: {
+        status: string,
+        progress: string,
+        response: UploadFileResponse | null,
+    },
+    pin: {
+        status: string,
+        response: PinStatus | null,
+    }
+}
+
+type Task = {
+    pool: PromisePool,
+    task_map: Map<string, TaskItem>,
+    success_task_list: TaskItem[],
+    failure_task_list: TaskItem[]
+}
+
+const useTaskStore = defineStore('task', {
+    state: (): Task => ({
+        pool: new PromisePool(5),
+        task_map: new Map(),
+        success_task_list: [],
+        failure_task_list: [],
+    }),
+    actions: {
+        addTask(task: TaskItem) {
+            this.task_map.set(task.id, task);
+        },
+        updateTaskStatus(id: string, status: string) {
+            const task = this.task_map.get(id);
+            if (task) {
+                task.upload.status = status;
+            }
+        },
+        updateTaskProgress(id: string, progress: string) {
+            const task = this.task_map.get(id);
+            if (task) {
+                task.upload.progress = progress;
+            }
+        },
+        updateTaskResponse(id: string, respronse: UploadFileResponse) {
+            const task = this.task_map.get(id);
+            if (task) {
+                task.upload.response = respronse;
+            }
+        },
+        updateTaskPinResponse(id: string, response: PinStatus) {
+            const task = this.task_map.get(id);
+            if (task) {
+                task.pin.response = response;
+            }
+        },
+        updateTaskPinStatus(id: string, status: string) {
+            const task = this.task_map.get(id);
+            if (task) {
+                task.pin.status = status;
+            }
+        }
+    }
 })
 
 export {
     pinia,
     useSettingStore,
+    type TaskItem,
+    useTaskStore,
 }

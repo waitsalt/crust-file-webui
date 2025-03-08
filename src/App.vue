@@ -9,7 +9,6 @@
 
 <style scoped>
 .appContainer {
-    display: flex;
     height: 100vh;
     width: 100vw;
 }
