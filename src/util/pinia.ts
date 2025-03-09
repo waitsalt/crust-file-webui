@@ -1,5 +1,5 @@
 import { createPinia, defineStore } from "pinia";
-import type { FolderItem, StorageItem } from "@/type/storage";
+import type { FileItem, FolderItem, StorageItem } from "@/type/storage";
 import type { PinStatus, UploadFileResponse } from "@/type/crust";
 import { PromisePool } from "./task_pool";
 import { uuid } from "./uuid";
@@ -65,11 +65,12 @@ const useSettingStore = defineStore('setting', {
         content: [],
     }),
     actions: {
+        addContentItem(fullPath: string, fileItem: FileItem) { },
         getContentItem(fullPath: string) {
             const path_items = fullPath.split('/').filter((item) => item !== '');
             const length = path_items.length;
             let content = this.content;
-            if (fullPath === '/') {
+            if (length === 0) {
                 return content;
             }
             for (let index = 0; index < length - 1; index++) {
@@ -77,6 +78,34 @@ const useSettingStore = defineStore('setting', {
             }
             const content_item = content.find((item) => item.name === path_items[length - 1]);
             return content_item;
+        },
+        delContentItem(fullPath: string) {
+            const pathItems = fullPath.split('/').filter(item => item !== '');
+            const length = pathItems.length;
+
+            // 无法删除根目录或空路径
+            if (length === 0) return;
+
+            let parentContent: StorageItem[] = this.content;
+
+            // 遍历到目标项的父级目录
+            for (let i = 0; i < length - 1; i++) {
+                const folderName = pathItems[i];
+                const folder = parentContent.find(
+                    item => item.type === 'folder' && item.name === folderName
+                ) as FolderItem | undefined;
+
+                // 父级目录不存在，终止操作
+                if (!folder) return;
+                parentContent = folder.children;
+            }
+
+            // 获取目标项名称并删除
+            const targetName = pathItems[length - 1];
+            const targetIndex = parentContent.findIndex(item => item.name === targetName);
+            if (targetIndex !== -1) {
+                parentContent.splice(targetIndex, 1);
+            }
         }
     }
 })
