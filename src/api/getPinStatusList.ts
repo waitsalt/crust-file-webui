@@ -1,5 +1,5 @@
+import type { PinListResponse } from "@/type/crust";
 import { axiosAuth } from "@/util/axios";
-import type { PinListResponse } from "@/util/type/crust";
 
 async function getStorageInfo() {
   try {

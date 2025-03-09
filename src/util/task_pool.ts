@@ -48,8 +48,6 @@ class Queue<T> {
 
 type Task = {
     taskFn: () => Promise<void>; // 任务函数
-    retries: number; // 剩余重试次数
-    maxRetries: number; // 最大重试次数
 }
 
 class PromisePool {
@@ -65,8 +63,8 @@ class PromisePool {
         this.errors = [];
     }
 
-    add(taskFn: () => Promise<void>, maxRetries: number = 3): void {
-        this.queue.enqueue({ taskFn, retries: maxRetries, maxRetries });
+    add(taskFn: () => Promise<void>,): void {
+        this.queue.enqueue({ taskFn });
         this.run();
     }
 
@@ -85,13 +83,13 @@ class PromisePool {
             .taskFn()
             .catch((error) => {
                 console.error('Task failed:', error);
-                if (task.retries > 0) {
-                    console.log(`Retrying task (${task.maxRetries - task.retries + 1}/${task.maxRetries})`);
-                    task.retries--;
-                    this.queue.enqueue(task); // 重新加入队列
-                } else {
-                    this.errors.push(error); // 记录最终失败的任务
-                }
+                // if (task.retries > 0) {
+                //     console.log(`Retrying task (${task.maxRetries - task.retries + 1}/${task.maxRetries})`);
+                //     task.retries--;
+                //     this.queue.enqueue(task); // 重新加入队列
+                // } else {
+                //     this.errors.push(error); // 记录最终失败的任务
+                // }
             })
             .finally(() => {
                 this.running--;

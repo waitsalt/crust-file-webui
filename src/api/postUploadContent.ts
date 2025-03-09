@@ -1,20 +1,18 @@
+import type { PinStatus, UploadFileResponse } from "@/type/crust";
+import type { StorageItem } from "@/type/storage";
 import { axiosAuth } from "@/util/axios";
-import { useUserStore, type Task } from "@/util/pinia";
-import type { PinStatus, UploadFileResponse } from "@/util/type/crust";
+import { createFullPath } from "@/util/createFullPath";
+import { useSettingStore, useTaskStore, type TaskItem } from "@/util/pinia";
 
-async function postUploadContent(task: Task) {
-    const userStore = useUserStore();
+async function postUploadContent(task: TaskItem) {
+    const taskStore = useTaskStore();
+    const settingStore = useSettingStore();
     const formData = new FormData();
-    if (Array.isArray(task.content)) {
-        for (const file of task.content as File[]) {
-            formData.append('file', file, file.webkitRelativePath);
-        }
-    } else {
-        formData.append('file', task.content as File);;
-    }
+
+    formData.append('file', task.content, task.content.name);
     try {
-        userStore.updateTaskStatus(task.id, 'upload');
-        let res: UploadFileResponse | UploadFileResponse[] = await axiosAuth.post(`${userStore.upload_gateway}/api/v0/add?pin=true&cid-version=1&hash=sha2-256`, formData, {
+        taskStore.updateTaskStatus(task.id, 'start');
+        let res: UploadFileResponse = await axiosAuth.post(`${settingStore.server.upload.use}/api/v0/add?pin=true&cid-version=1&hash=sha2-256`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -22,46 +20,50 @@ async function postUploadContent(task: Task) {
                 if (progressEvent.total) {
                     // 计算上传进度百分比
                     const percentCompleted = ((progressEvent.loaded * 100) / progressEvent.total).toFixed(2);
-                    userStore.updateTaskProgress(task.id, percentCompleted);
+                    taskStore.updateTaskProgress(task.id, percentCompleted);
                 }
             },
         });
-        if (typeof res === 'string') {
-            const jsonObjects = (res as string).split(/(?<=})\s*(?={)/g);
 
-            // 解析每个 JSON 对象
-            const parsedObjects = jsonObjects.map(json => JSON.parse(json));
-            res = parsedObjects as UploadFileResponse[];
-        }
-
-        userStore.updateTaskResponse(task.id, res);
-        userStore.updateTaskStatus(task.id, 'success');
+        taskStore.updateTaskResponse(task.id, res);
+        taskStore.updateTaskStatus(task.id, 'success');
 
         try {
-            let cid = '';
-            let name = '';
-            if (Array.isArray(res)) {
-                const item = res[res.length - 1];
-                cid = item.Hash;
-                name = item.Name;
-            } else {
-                cid = res.Hash;
-                name = res.Name;
-            }
-            userStore.updateTaskPinStatus(task.id, "start");
-            const pinRes: PinStatus = await axiosAuth.post(`${userStore.pin_server}/psa/pins`, {
+            const cid = res.Hash;
+            const name = res.Name;
+            taskStore.updateTaskPinStatus(task.id, "start");
+            const pinRes: PinStatus = await axiosAuth.post(`${settingStore.server.pin.use}/psa/pins`, {
                 cid: cid,
                 name: name,
             });
-            userStore.updateTaskPinResponse(task.id, pinRes);
-            userStore.updateTaskPinStatus(task.id, "success");
+            taskStore.updateTaskPinResponse(task.id, pinRes);
+            taskStore.updateTaskPinStatus(task.id, "success");
+
+            const fullPath = `/${task.path}/${task.content.webkitRelativePath}`.replace(/\/+/g, '/');
+            const storageItem: StorageItem = {
+                type: 'file',
+                name: task.content.name,
+                size: task.content.size,
+                created: Date(),
+                cid: cid,
+                request_id: pinRes.requestId,
+            }
+            createFullPath(fullPath, storageItem);
         } catch {
-            userStore.updateTaskPinStatus(task.id, "fail");
+            taskStore.updateTaskPinStatus(task.id, "fail");
         }
     } catch {
-        userStore.updateTaskStatus(task.id, 'fail');
+        taskStore.updateTaskStatus(task.id, 'fail');
     }
+    if (task.pin.status === 'success' && task.upload.status === "success") {
+        taskStore.success_task_list.push(task);
+    } else {
+        taskStore.failure_task_list.push(task);
+    }
+    taskStore.task_map.delete(task.id);
+
 }
+
 
 export {
     postUploadContent,

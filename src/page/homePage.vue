@@ -10,6 +10,8 @@ import downloadComp from '@/component/downloadComp.vue';
 import moveComp from '@/component/moveComp.vue';
 import settingComp from '@/component/settingComp.vue';
 import uploadComp from '@/component/uploadComp.vue';
+import { resolveFullPath } from '@/util/resolveFullPath';
+import { downloadFile } from '@/util/downloadFile';
 
 const route = useRoute();
 const settingStore = useSettingStore();
@@ -23,7 +25,6 @@ const currentContent = ref<{ type: 'file' | 'folder' | 'error'; content: Storage
 });
 
 // 计算属性
-const isRoot = computed(() => currentPath.value === '/');
 const allSelected = computed({
     get: () => selectedItems.value.length === (currentContent.value.content as StorageItem[]).length
         && (currentContent.value.content as StorageItem[]).length > 0,
@@ -49,39 +50,12 @@ const updateTitle = () => {
 
 const updateContent = () => {
     try {
-        const result = resolvePath(currentPath.value, settingStore.content);
+        const result = resolveFullPath(currentPath.value);
         currentContent.value = result;
     } catch (error) {
         console.error('路径解析错误:', error);
         currentContent.value = { type: 'error', content: [] };
     }
-};
-
-const resolvePath = (path: string, content: StorageItem[]): { type: 'file' | 'folder' | 'error'; content: StorageItem | StorageItem[] } => {
-    const segments = path.split('/').filter(Boolean);
-    if (path === '/') return { type: 'folder', content };
-
-    let currentChildren: StorageItem[] = content;
-    let targetItem: StorageItem | undefined;
-
-    for (let i = 0; i < segments.length; i++) {
-        targetItem = currentChildren.find(item => item.name === segments[i]);
-        if (!targetItem) break;
-
-        if (i === segments.length - 1) break; // 到达目标层级
-
-        if (targetItem.type === 'folder') {
-            currentChildren = targetItem.children || [];
-        } else {
-            throw new Error('路径包含文件类型');
-        }
-    }
-
-    if (!targetItem) return { type: 'error', content: [] };
-
-    return targetItem.type === 'folder'
-        ? { type: 'folder', content: targetItem.children || [] }
-        : { type: 'file', content: targetItem };
 };
 
 const toggleSelection = (itemName: string) => {
@@ -140,6 +114,7 @@ const closePanel = () => {
 // 初始化
 updateTitle();
 updateContent();
+
 </script>
 
 <template>
@@ -162,11 +137,11 @@ updateContent();
             </div>
             <div class="right-group">
                 <div class="storage-actions">
-                    <button class="action-item" @click="openPanel('download')" :disabled="!hasSelection"
+                    <!-- <button class="action-item" @click="openPanel('download')" :disabled="!hasSelection"
                         aria-label="下载选中项目">
                         <AiOutlineCloudDownload />
                         <span class="tooltip">下载</span>
-                    </button>
+                    </button> -->
 
                     <button class="action-item" @click="openPanel('move')" :disabled="!hasSelection"
                         aria-label="移动选中项目">
@@ -180,7 +155,8 @@ updateContent();
                         <span class="tooltip">删除</span>
                     </button>
 
-                    <button class="action-item" @click="openPanel('upload')" aria-label="上传文件">
+                    <button class="action-item" @click="openPanel('upload')" aria-label="上传文件"
+                        v-show="currentContent.type !== 'file'">
                         <AiOutlineCloudUpload />
                         <span class="tooltip">上传</span>
                     </button>
@@ -206,9 +182,11 @@ updateContent();
                 </button>
 
                 <!-- 功能组件 -->
-                <component :is="deleteComp" v-show="activePanel === 'delete'" />
-                <component :is="downloadComp" v-show="activePanel === 'download'" />
-                <component :is="moveComp" v-show="activePanel === 'move'" />
+                <!-- <component :is="downloadComp" v-show="activePanel === 'download'" /> -->
+                <component :is="moveComp" v-show="activePanel === 'move'" :selectedItems="selectedItems"
+                    :closePanel="closePanel" />
+                <component :is="deleteComp" v-show="activePanel === 'delete'" :selectedItems="selectedItems"
+                    :closePanel="closePanel" />
                 <component :is="settingComp" v-show="activePanel === 'setting'" />
                 <component :is="uploadComp" v-show="activePanel === 'upload'" />
             </div>
@@ -228,11 +206,10 @@ updateContent();
                     <p>文件大小：{{ formatFileSize((currentContent.content as FileItem).size) }}</p>
                     <p>创建时间：{{ (currentContent.content as FileItem).created }}</p>
                 </div>
-                <a class="download-btn"
-                    :href="`${settingStore.server.download.use}/ipfs/${(currentContent.content as FileItem).cid}`"
-                    :download="(currentContent.content as FileItem).name" target="_blank">
+                <button class="download-btn"
+                    @click="downloadFile(`${settingStore.server.download.use}/ipfs/${(currentContent.content as FileItem).cid}`, (currentContent.content as FileItem).name)">
                     下载文件
-                </a>
+                </button>
             </section>
 
             <!-- 文件夹视图 -->
@@ -461,8 +438,8 @@ updateContent();
     background: #2d3748;
     border-radius: 10px;
     padding: 0;
-    width: 80%;
-    height: 80%;
+    max-width: 80%;
+    max-height: 80%;
     overflow-y: auto;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     position: relative;
@@ -535,6 +512,7 @@ updateContent();
     background: #4299e1;
     color: white;
     border-radius: 6px;
+    border: 0px;
     text-decoration: none;
     transition: background 0.2s;
 

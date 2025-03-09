@@ -31,11 +31,10 @@ const axiosAuth = axios.create({
 axiosAuth.interceptors.request.use(
     async (config) => {
         const settingStore = useSettingStore();
+        settingStore.user.token = `Basic c3Vic3RyYXRlLWNUR2ZLYXk0c0tDb0VTTW43WVpxcThtQVZ1SzhSbjJNV2I5N1JZRXlaZ3BkRmZYWDM6MHgxNDVlOGY0MmIwMmIyNzBjODhjYzk1NzYzNDUwYTdkZTVkOTk2NDNjYjA0ZDM4OGY5MzVjZTJlNWY2OTNiMzNhNzk2NWIyNTdiN2M4ZTQ5MmM1NjhjYTU1MmJiY2M1YzQxYjM0ZTRkYmE4ZDJjM2VkM2FlMTdmN2Y2MGU0YTk4NQ==`;
         if (settingStore.user.token !== null) {
-            config.headers.Authorization = `Basic c3Vic3RyYXRlLWNUR2ZLYXk0c0tDb0VTTW43WVpxcThtQVZ1SzhSbjJNV2I5N1JZRXlaZ3BkRmZYWDM6MHgxNDVlOGY0MmIwMmIyNzBjODhjYzk1NzYzNDUwYTdkZTVkOTk2NDNjYjA0ZDM4OGY5MzVjZTJlNWY2OTNiMzNhNzk2NWIyNTdiN2M4ZTQ5MmM1NjhjYTU1MmJiY2M1YzQxYjM0ZTRkYmE4ZDJjM2VkM2FlMTdmN2Y2MGU0YTk4NQ==`;
             config.headers.Authorization = settingStore.user.token;
         } else {
-            config.headers.Authorization = `Basic c3Vic3RyYXRlLWNUR2ZLYXk0c0tDb0VTTW43WVpxcThtQVZ1SzhSbjJNV2I5N1JZRXlaZ3BkRmZYWDM6MHgxNDVlOGY0MmIwMmIyNzBjODhjYzk1NzYzNDUwYTdkZTVkOTk2NDNjYjA0ZDM4OGY5MzVjZTJlNWY2OTNiMzNhNzk2NWIyNTdiN2M4ZTQ5MmM1NjhjYTU1MmJiY2M1YzQxYjM0ZTRkYmE4ZDJjM2VkM2FlMTdmN2Y2MGU0YTk4NQ==`;
             const access_token = await getAccessToken();
             settingStore.user.token = access_token;
             config.headers.Authorization = access_token;

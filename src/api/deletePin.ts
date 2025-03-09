@@ -1,13 +1,14 @@
 import { axiosAuth } from "@/util/axios";
-import { useUserStore } from "@/util/pinia";
+import { notyf } from "@/util/notify";
+import { useSettingStore } from "@/util/pinia";
 
 
 async function deletePin(requestId: string) {
-    const userStore = useUserStore();
+    const settingStore = useSettingStore();
     try {
-        const res = axiosAuth.delete(`${userStore.pin_server}/psa/pins/${requestId}`);
+        const res = axiosAuth.delete(`${settingStore.server.pin.use}/psa/pins/${requestId}`);
     } catch {
-        alert('删除失败')
+        notyf.error('删除失败')
     }
 }
 

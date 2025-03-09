@@ -1,7 +1,8 @@
 import { createPinia, defineStore } from "pinia";
-import type { StorageItem } from "@/type/storage";
+import type { FolderItem, StorageItem } from "@/type/storage";
 import type { PinStatus, UploadFileResponse } from "@/type/crust";
 import { PromisePool } from "./task_pool";
+import { uuid } from "./uuid";
 
 const pinia = createPinia()
 
@@ -63,6 +64,21 @@ const useSettingStore = defineStore('setting', {
         },
         content: [],
     }),
+    actions: {
+        getContentItem(fullPath: string) {
+            const path_items = fullPath.split('/').filter((item) => item !== '');
+            const length = path_items.length;
+            let content = this.content;
+            if (fullPath === '/') {
+                return content;
+            }
+            for (let index = 0; index < length - 1; index++) {
+                content = (content.find((item) => item.type === 'folder' && item.name === path_items[index]) as FolderItem).children;
+            }
+            const content_item = content.find((item) => item.name === path_items[length - 1]);
+            return content_item;
+        }
+    }
 })
 
 type TaskItem = {
@@ -70,6 +86,7 @@ type TaskItem = {
     name: string,
     size: number,
     content: File,
+    path: string,
     upload: {
         status: string,
         progress: string,
@@ -78,6 +95,25 @@ type TaskItem = {
     pin: {
         status: string,
         response: PinStatus | null,
+    }
+}
+
+function taskFromFile(path: string, file: File): TaskItem {
+    return {
+        id: uuid(),
+        name: file.name,
+        size: file.size,
+        content: file,
+        path: path,
+        upload: {
+            status: 'wait',
+            progress: '0',
+            response: null,
+        },
+        pin: {
+            status: 'wait',
+            response: null,
+        }
     }
 }
 
@@ -132,9 +168,21 @@ const useTaskStore = defineStore('task', {
     }
 })
 
+type Show = {
+    user_panel: string | null,
+    selected_item: string[],
+}
+
+const useShowStore = defineStore("show", {
+    state: () => ({
+        user_panel: null,
+    }),
+})
+
 export {
     pinia,
     useSettingStore,
     type TaskItem,
     useTaskStore,
+    taskFromFile,
 }
