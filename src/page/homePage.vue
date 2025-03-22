@@ -10,8 +10,6 @@ import downloadComp from '@/component/downloadComp.vue';
 import moveComp from '@/component/moveComp.vue';
 import settingComp from '@/component/settingComp.vue';
 import uploadComp from '@/component/uploadComp.vue';
-import { resolveFullPath } from '@/util/resolveFullPath';
-import { downloadFile } from '@/util/downloadFile';
 
 const route = useRoute();
 const settingStore = useSettingStore();

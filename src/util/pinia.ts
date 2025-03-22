@@ -2,7 +2,7 @@ import { createPinia, defineStore } from "pinia";
 import type { FileItem, FolderItem, StorageItem } from "@/type/storage";
 import type { PinStatus, UploadFileResponse } from "@/type/crust";
 import { PromisePool } from "./task_pool";
-import { uuid } from "./uuid";
+import { uuid } from ".";
 
 const pinia = createPinia()
 
